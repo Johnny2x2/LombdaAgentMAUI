@@ -18,6 +18,12 @@
             Icon="settings"
             ContentTemplate="{DataTemplate local:SettingsPage}"
             Route="SettingsPage" />
+            
+        <ShellContent
+            Title="File Test"
+            Icon="file"
+            ContentTemplate="{DataTemplate local:FilePickerTestPage}"
+            Route="FilePickerTestPage" />
     </TabBar>
 
 </Shell>

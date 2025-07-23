@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="LombdaAgentMAUI.FilePickerTestPage"
+             Title="File Picker Test">
+    
+    <ScrollView>
+        <VerticalStackLayout Spacing="25" Padding="30">
+            <Label 
+                Text="File Picker Test"
+                FontSize="24"
+                HorizontalOptions="Center" />
+
+            <VerticalStackLayout Spacing="10">
+                <Button 
+                    x:Name="PickFileButton"
+                    Text="Pick File Directly"
+                    Clicked="OnPickFileClicked" 
+                    HorizontalOptions="Center" />
+
+                <Button 
+                    x:Name="ShowDialogButton"
+                    Text="Show File Upload Dialog"
+                    Clicked="OnShowDialogClicked" 
+                    HorizontalOptions="Center" />
+            </VerticalStackLayout>
+
+            <ActivityIndicator 
+                x:Name="ProgressIndicator"
+                IsRunning="False"
+                IsVisible="False"
+                HorizontalOptions="Center" />
+
+            <Border Stroke="{AppThemeBinding Light=#E0E0E0, Dark=#404040}" 
+                    StrokeThickness="1"
+                    Padding="15">
+                <VerticalStackLayout Spacing="10">
+                    <Label 
+                        Text="File Information:" 
+                        FontAttributes="Bold" />
+                        
+                    <Label 
+                        x:Name="FileNameLabel" 
+                        Text="No file selected" 
+                        FontSize="14" />
+                        
+                    <Label 
+                        x:Name="FileSizeLabel" 
+                        Text="" 
+                        FontSize="14" />
+                        
+                    <Image 
+                        x:Name="FilePreviewImage" 
+                        HeightRequest="200" 
+                        HorizontalOptions="Center"
+                        IsVisible="False" />
+                </VerticalStackLayout>
+            </Border>
+            
+            <Label 
+                x:Name="StatusLabel"
+                Text="Ready"
+                HorizontalOptions="Center" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

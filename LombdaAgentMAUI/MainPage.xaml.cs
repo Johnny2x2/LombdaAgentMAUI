@@ -1,6 +1,7 @@
 ﻿using System.Collections.ObjectModel;
 using LombdaAgentMAUI.Core.Models;
 using LombdaAgentMAUI.Core.Services;
+using LombdaAgentMAUI.Services;
 
 namespace LombdaAgentMAUI;
 
@@ -9,6 +10,7 @@ public partial class MainPage : ContentPage
     private readonly IAgentApiService _agentApiService;
     private readonly IConfigurationService _configService;
     private readonly ISessionManagerService _sessionManager;
+    private readonly IFilePickerService _filePickerService;
     private readonly ObservableCollection<ChatMessage> _chatMessages;
     private readonly ObservableCollection<string> _agentList;
     private readonly ObservableCollection<string> _agentTypes;
@@ -16,14 +18,20 @@ public partial class MainPage : ContentPage
     private string? _currentThreadId;
     private string? _currentResponseId; // Track last response ID for API continuity
     private CancellationTokenSource? _streamingCancellationTokenSource;
+    
+    // File attachment
+    private string? _currentFileBase64Data;
+    private string? _currentFileName;
 
-    public MainPage(IAgentApiService agentApiService, IConfigurationService configService, ISessionManagerService sessionManager)
+    public MainPage(IAgentApiService agentApiService, IConfigurationService configService, 
+                   ISessionManagerService sessionManager, IFilePickerService filePickerService)
     {
         InitializeComponent();
         
         _agentApiService = agentApiService;
         _configService = configService;
         _sessionManager = sessionManager;
+        _filePickerService = filePickerService;
         _chatMessages = new ObservableCollection<ChatMessage>();
         _agentList = new ObservableCollection<string>();
         _agentTypes = new ObservableCollection<string>();
@@ -300,6 +308,66 @@ public partial class MainPage : ContentPage
             LogSystemMessage($"Error selecting agent: {ex.Message}");
         }
     }
+    
+    private async void OnAttachFileClicked(object sender, EventArgs e)
+    {
+        try
+        {
+            LogSystemMessage("Opening file attachment dialog...");
+            
+            // Create and show the file upload dialog
+            var fileDialog = new FileUploadDialog(_filePickerService);
+            bool result = await fileDialog.ShowDialogAsync();
+            
+            // Check if a file was selected and processed
+            if (result && fileDialog.HasFile && !string.IsNullOrEmpty(fileDialog.FileBase64Data))
+            {
+                _currentFileBase64Data = fileDialog.FileBase64Data;
+                _currentFileName = fileDialog.FileAttachment?.FileName ?? "attachment";
+                
+                // Update the UI to show the attached file indicator
+                FileAttachmentIndicator.IsVisible = true;
+                FileNameLabel.Text = _currentFileName;
+                
+                LogSystemMessage($"File attached successfully: {_currentFileName}");
+                
+                // Visual feedback (optional)
+                AttachFileButton.BackgroundColor = Colors.LightGreen;
+                await Task.Delay(500);
+                AttachFileButton.BackgroundColor = null;
+            }
+            else if (!result)
+            {
+                LogSystemMessage("File attachment canceled by user");
+            }
+            else
+            {
+                LogSystemMessage("File attachment dialog returned but no file was selected");
+            }
+        }
+        catch (Exception ex)
+        {
+            LogSystemMessage($"Error attaching file: {ex.Message}");
+            
+            // Show error to user
+            await DisplayAlert("File Attachment Error", 
+                "There was a problem attaching the file. Please try again or select a different file.", 
+                "OK");
+        }
+    }
+    
+    private void OnClearAttachmentClicked(object sender, EventArgs e)
+    {
+        ClearFileAttachment();
+    }
+    
+    private void ClearFileAttachment()
+    {
+        _currentFileBase64Data = null;
+        _currentFileName = null;
+        FileAttachmentIndicator.IsVisible = false;
+        LogSystemMessage("File attachment cleared");
+    }
 
     private async void OnSendClicked(object? sender, EventArgs e)
     {
@@ -347,14 +415,38 @@ public partial class MainPage : ContentPage
             }
 
             var streamingCheckBox = this.FindByName<CheckBox>("StreamingCheckBox");
+            bool hasAttachment = !string.IsNullOrEmpty(_currentFileBase64Data);
+            
+            if (hasAttachment)
+            {
+                LogSystemMessage($"Sending message with file attachment: {_currentFileName}");
+            }
+            
             if (streamingCheckBox?.IsChecked == true)
             {
-                await SendStreamingMessage(message);
+                if (hasAttachment)
+                {
+                    await SendStreamingMessageWithFile(message, _currentFileBase64Data);
+                }
+                else
+                {
+                    await SendStreamingMessage(message);
+                }
             }
             else
             {
-                await SendRegularMessage(message);
+                if (hasAttachment)
+                {
+                    await SendRegularMessageWithFile(message, _currentFileBase64Data);
+                }
+                else
+                {
+                    await SendRegularMessage(message);
+                }
             }
+            
+            // Clear the file attachment after sending
+            ClearFileAttachment();
         }
         catch (Exception ex)
         {
@@ -369,6 +461,62 @@ public partial class MainPage : ContentPage
                 sendButton.IsEnabled = true;
                 sendButton.Text = "Send";
             }
+        }
+    }
+    
+    private async Task SendRegularMessageWithFile(string message, string? fileBase64Data)
+    {
+        LogSystemMessage($"Sending message with file to agent {_currentAgentId}...");
+
+        var response = await _agentApiService.SendMessageWithFileAsync(_currentAgentId!, message, fileBase64Data!, _currentThreadId);
+        if (response != null)
+        {
+            LogSystemMessage($"Response received - ThreadId: {response.ThreadId}");
+            LogSystemMessage($"Response text length: {response.Text?.Length ?? 0}");
+
+            _currentThreadId = response.ThreadId;
+
+            var agentMessage = new ChatMessage
+            {
+                Text = response.Text ?? "[No response text received]",
+                IsUser = false,
+                Timestamp = DateTime.Now
+            };
+
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                _chatMessages.Add(agentMessage);
+                LogSystemMessage($"Added agent message to chat. Total messages: {_chatMessages.Count}");
+                
+                var chatCollectionView = this.FindByName<CollectionView>("ChatCollectionView");
+                if (chatCollectionView != null && _chatMessages.Count > 0)
+                {
+                    chatCollectionView.ScrollTo(_chatMessages.Last(), position: ScrollToPosition.End, animate: true);
+                }
+            });
+
+            // Save session after receiving response
+            await SaveCurrentSessionAsync();
+
+            LogSystemMessage("Response processing completed.");
+        }
+        else
+        {
+            LogSystemMessage("Failed to get response from agent - response was null.");
+            
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                var errorMessage = new ChatMessage
+                {
+                    Text = "❌ Failed to get response from agent. Please try again.",
+                    IsUser = false,
+                    Timestamp = DateTime.Now
+                };
+                _chatMessages.Add(errorMessage);
+            });
+            
+            // Save session even with error message
+            await SaveCurrentSessionAsync();
         }
     }
 
@@ -426,6 +574,271 @@ public partial class MainPage : ContentPage
             
             // Save session even with error message
             await SaveCurrentSessionAsync();
+        }
+    }
+    
+    private async Task SendStreamingMessageWithFile(string message, string? fileBase64Data)
+    {
+        LogSystemMessage($"🚀 Starting streaming message with file to agent {_currentAgentId}...");
+
+        var agentMessage = new ChatMessage
+        {
+            Text = "🤖 Initializing...",
+            IsUser = false,
+            Timestamp = DateTime.Now
+        };
+
+        await MainThread.InvokeOnMainThreadAsync(() =>
+        {
+            _chatMessages.Add(agentMessage);
+            LogSystemMessage("✅ Added placeholder message to chat");
+        });
+
+        _streamingCancellationTokenSource?.Cancel();
+        _streamingCancellationTokenSource = new CancellationTokenSource();
+        _streamingCancellationTokenSource.CancelAfter(TimeSpan.FromMinutes(5));
+
+        var streamedContent = "";
+        var hasReceivedContent = false;
+        var eventCount = 0;
+        var updateCount = 0;
+        var startTime = DateTime.Now;
+        
+        var messageLock = new object();
+        var hasReceivedFirstDelta = false;
+
+        // Run the streaming operation on a background task to prevent UI blocking
+        try
+        {
+            LogSystemMessage("🔄 Starting streaming request with file...");
+            
+            // Use Task.Run to execute streaming on background thread
+            await Task.Run(async () =>
+            {
+                try
+                {
+                    var resultThreadId = await _agentApiService.SendMessageStreamWithFileAsync(
+                        _currentAgentId!,
+                        message,
+                        fileBase64Data!,
+                        _currentThreadId,
+                        // Text callback - runs on background thread
+                        (streamedText) =>
+                        {
+                            lock (messageLock)
+                            {
+                                hasReceivedContent = true;
+                                streamedContent += streamedText;
+                                updateCount++;
+                                hasReceivedFirstDelta = true;
+                            }
+                            
+                            // Only log every 10th chunk to reduce log spam
+                            if (updateCount % 10 == 0)
+                            {
+                                LogSystemMessage($"📥 Received {updateCount} text chunks (total: {streamedContent.Length} chars)");
+                            }
+                            
+                            // Capture content for UI update
+                            string currentContent;
+                            lock (messageLock)
+                            {
+                                currentContent = streamedContent;
+                            }
+
+                            Dispatcher.DispatchAsync(async () =>
+                            {
+                                try
+                                {
+                                    if (_chatMessages.Contains(agentMessage))
+                                    {
+                                        agentMessage.Text = currentContent;
+
+                                        // CRITICAL: Yield control to let the GUI framework work
+                                        await Task.Yield();
+                                    }
+                                    else
+                                    {
+                                        LogSystemMessage("⚠️ Agent message no longer in collection");
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    LogSystemMessage($"❌ Error updating UI: {ex.Message}");
+                                }
+                            });
+                        },
+                        // Event callback - runs on background thread
+                        (eventData) =>
+                        {
+                            eventCount++;
+                            var elapsedMs = (DateTime.Now - startTime).TotalMilliseconds;
+                            
+                            // Track response ID from streaming events
+                            if (eventData.EventType == "created" && !string.IsNullOrEmpty(eventData.ResponseId))
+                            {
+                                _currentResponseId = eventData.ResponseId;
+                                LogSystemMessage($"📝 Stream created (ID: {eventData.ResponseId})");
+                            }
+                            
+                            // Only log important events to reduce clutter
+                            switch (eventData.EventType)
+                            {
+                                case "connected":
+                                    LogSystemMessage("✅ Connected to streaming endpoint");
+                                    break;
+                                    
+                                case "created":
+                                    // Already logged above when tracking response ID
+                                    break;
+                                    
+                                case "complete":
+                                    LogSystemMessage($"🏁 Response complete (Thread: {eventData.ThreadId})");
+                                    break;
+                                    
+                                case "error":
+                                case "stream_error":
+                                    LogSystemMessage($"❌ Error: {eventData.Error}");
+                                    break;
+                                    
+                                case "reasoning":
+                                    LogSystemMessage($"🧠 Reasoning step received");
+                                    break;
+                                    
+                                // Skip logging delta events as they're too verbose
+                                case "delta":
+                                    break;
+                                    
+                                default:
+                                    LogSystemMessage($"ℹ️ Event: {eventData.EventType}");
+                                    break;
+                            }
+
+                            // Queue UI update without blocking the streaming thread
+                            Dispatcher.DispatchAsync(async () =>
+                            {
+                                try
+                                {
+                                    if (!_chatMessages.Contains(agentMessage))
+                                    {
+                                        return;
+                                    }
+                                    
+                                    bool shouldUpdateFromEvent;
+                                    lock (messageLock)
+                                    {
+                                        shouldUpdateFromEvent = !hasReceivedFirstDelta;
+                                    }
+                                    
+                                    switch (eventData.EventType)
+                                    {
+                                        case "connected":
+                                            if (shouldUpdateFromEvent)
+                                            {
+                                                agentMessage.Text = "🔗 Connected, waiting for response...";
+                                            }
+                                            break;
+                                            
+                                        case "created":
+                                            if (shouldUpdateFromEvent)
+                                            {
+                                                agentMessage.Text = "⚡ Processing your request with file...";
+                                            }
+                                            break;
+                                            
+                                        case "complete":
+                                            if (!string.IsNullOrEmpty(eventData.ThreadId))
+                                            {
+                                                _currentThreadId = eventData.ThreadId;
+                                            }
+                                            break;
+                                            
+                                        case "error":
+                                        case "stream_error":
+                                            agentMessage.Text = $"❌ Error: {eventData.Error}";
+                                            break;
+                                    }
+                                    
+                                    // CRITICAL: Yield control to let the GUI framework work
+                                    await Task.Yield();
+                                }
+                                catch (Exception ex)
+                                {
+                                    LogSystemMessage($"❌ Error in event handler: {ex.Message}");
+                                }
+                            });
+                        },
+                        _streamingCancellationTokenSource.Token
+                    );
+
+                    LogSystemMessage("✅ Streaming request completed");
+                    
+                    // Final updates on UI thread
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                    {
+                        string finalContent;
+                        lock (messageLock)
+                        {
+                            finalContent = streamedContent;
+                        }
+                        
+                        if (!string.IsNullOrEmpty(finalContent))
+                        {
+                            if (_chatMessages.Contains(agentMessage))
+                            {
+                                agentMessage.Text = finalContent;
+                                LogSystemMessage($"✅ Response complete ({finalContent.Length} characters)");
+                            }
+                        }
+
+                        var chatCollectionView = this.FindByName<CollectionView>("ChatCollectionView");
+                        if (chatCollectionView != null && _chatMessages.Count > 0)
+                        {
+                            chatCollectionView.ScrollTo(_chatMessages.Last(), position: ScrollToPosition.End, animate: true);
+                        }
+                    });
+
+                    if (!string.IsNullOrEmpty(resultThreadId))
+                    {
+                        _currentThreadId = resultThreadId;
+                        LogSystemMessage($"✅ Thread ID: {resultThreadId}");
+                    }
+                    
+                    var totalTime = (DateTime.Now - startTime).TotalSeconds;
+                    LogSystemMessage($"📊 Streaming completed in {totalTime:0.1}s");
+                    
+                    if (!hasReceivedContent)
+                    {
+                        LogSystemMessage("⚠️ No streaming content received - check API connection");
+                        await MainThread.InvokeOnMainThreadAsync(() =>
+                        {
+                            if (_chatMessages.Contains(agentMessage))
+                            {
+                                agentMessage.Text = "❌ No response received. Please try again.";
+                            }
+                        });
+                    }
+                    
+                    // Save session after streaming completes
+                    await SaveCurrentSessionAsync();
+                }
+                catch (Exception streamEx)
+                {
+                    LogSystemMessage($"❌ Error during streaming: {streamEx.Message}");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            LogSystemMessage($"❌ Error in streaming logic: {ex.Message}");
+        }
+        finally
+        {
+            // Final cancellation and cleanup
+            _streamingCancellationTokenSource?.Cancel();
+            _streamingCancellationTokenSource = null;
+            
+            LogSystemMessage("🔚 Streaming process ended");
         }
     }
 
@@ -964,6 +1377,7 @@ public partial class MainPage : ContentPage
         _chatMessages.Clear();
         _currentThreadId = null;
         _currentResponseId = null;
+        ClearFileAttachment();
         LogSystemMessage("Chat cleared. New conversation will start with next message.");
         
         // Save the cleared session
@@ -993,6 +1407,7 @@ public partial class MainPage : ContentPage
                 _chatMessages.Clear();
                 _currentThreadId = null;
                 _currentResponseId = null;
+                ClearFileAttachment();
                 
                 LogSystemMessage($"Session cleared for agent {_currentAgentId}");
             }

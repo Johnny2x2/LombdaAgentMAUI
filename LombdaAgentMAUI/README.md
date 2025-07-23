@@ -8,6 +8,7 @@ A cross-platform .NET MAUI application for interacting with LombdaAgent through 
 - **Agent Management**: Create and manage agents through the API
 - **Real-time Chat**: Send messages and receive responses from agents
 - **Streaming Support**: Real-time streaming responses for better user experience
+- **File Attachments**: Send images, documents, and other files to the agent
 - **Agent List**: View all available agents
 - **System Logs**: Monitor API communication and system events
 - **Settings Configuration**: Configure API endpoint settings
@@ -33,6 +34,7 @@ A cross-platform .NET MAUI application for interacting with LombdaAgent through 
 - **Agent Selection**: Dropdown to select from available agents
 - **Chat Area**: Displays conversation history with timestamps
 - **Message Input**: Type and send messages to the selected agent
+- **File Attachment**: Attach files to send to the agent
 - **Streaming Toggle**: Enable/disable real-time streaming responses
 - **Agent List**: Shows all available agents
 - **System Logs**: Displays API communication logs
@@ -47,6 +49,9 @@ A cross-platform .NET MAUI application for interacting with LombdaAgent through 
 #### Agent Creation
 Click "Create Agent" to create a new agent with a custom name. The agent will be available for chat immediately.
 
+#### File Attachments
+Send images, documents, and other files to the agent by clicking the attachment button. Files are converted to base64 and included as `FileBase64Data` in the message request in the format: `data:{mediaType};base64,{base64EncodedData}`.
+
 #### Streaming vs Regular Responses
 - **Streaming**: Responses appear character by character as they're generated
 - **Regular**: Complete responses appear after generation is finished
@@ -59,8 +64,8 @@ Monitor API calls, errors, and system events in the right panel for debugging an
 The app communicates with the LombdaAgent API using:
 - **GET /v1/agents**: List all agents
 - **POST /v1/agents**: Create new agents
-- **POST /v1/agents/{id}/messages**: Send messages (regular)
-- **POST /v1/agents/{id}/messages/stream**: Send messages (streaming)
+- **POST /v1/agents/{id}/messages**: Send messages (regular) with optional file attachments
+- **POST /v1/agents/{id}/messages/stream**: Send messages (streaming) with optional file attachments
 
 ### Platform Support
 
@@ -78,6 +83,7 @@ The app uses secure storage to save API settings between sessions. Configure you
 1. **Connection Issues**: Verify the API URL and ensure the API is running
 2. **No Agents**: Create agents through the app or verify API connectivity
 3. **Streaming Issues**: Check network connectivity and API endpoint
+4. **File Attachment Issues**: Ensure files are not too large (limit to 10MB per file for best performance)
 
 ### Architecture
 
@@ -88,19 +94,22 @@ The app uses secure storage to save API settings between sessions. Configure you
 
 ## Development
 
-### Project Structure
-```
-LombdaAgentMAUI/
-??? Models/           # Data models (ApiModels.cs)
-??? Services/         # API and configuration services
-??? Converters/       # XAML value converters
-??? MainPage.xaml    # Main chat interface
-??? SettingsPage.xaml # Configuration page
-??? MauiProgram.cs   # Service registration
-```
-
+### Project StructureLombdaAgentMAUI/
+? Models/           # Data models (ApiModels.cs)
+? Services/         # API and configuration services
+? Utilities/        # Helper utilities
+? Converters/       # XAML value converters
+? MainPage.xaml    # Main chat interface
+? SettingsPage.xaml # Configuration page
+? MauiProgram.cs   # Service registration
 ### Key Components
 - **AgentApiService**: Handles API communication
 - **ConfigurationService**: Manages app settings
+- **FilePickerService**: Handles file selection and processing
+- **FileAttachmentUtility**: Converts files to base64 data URIs
 - **ChatMessage**: Message data model
 - **Value Converters**: UI binding helpers
+
+### File Attachment API
+The API expects file attachments to be sent as a single `FileBase64Data` property in the format:data:{mediaType};base64,{base64EncodedData}
+For example:data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/...

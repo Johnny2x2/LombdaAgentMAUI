@@ -31,6 +31,27 @@ namespace LombdaAgentMAUI.Core.Models
     }
 
     /// <summary>
+    /// File attachment for messages (used in UI only)
+    /// </summary>
+    public class FileAttachment
+    {
+        /// <summary>
+        /// The data URI in format: data:{mediaType};base64,{base64EncodedData}
+        /// </summary>
+        public string DataUri { get; set; } = string.Empty;
+
+        /// <summary>
+        /// File name with extension
+        /// </summary>
+        public string FileName { get; set; } = string.Empty;
+
+        /// <summary>
+        /// MIME media type (e.g., "image/jpeg")
+        /// </summary>
+        public string MediaType { get; set; } = string.Empty;
+    }
+
+    /// <summary>
     /// Request to send a message to an agent
     /// </summary>
     public class MessageRequest
@@ -44,6 +65,15 @@ namespace LombdaAgentMAUI.Core.Models
         /// Optional thread ID for conversation context
         /// </summary>
         public string? ThreadId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the file data encoded in Base64 format in URL format.
+        /// </summary>
+        public string? FileBase64Data { get; set; }
+
+        // Kept for backward compatibility with existing code
+        [System.Text.Json.Serialization.JsonIgnore]
+        internal List<FileAttachment>? Files { get; set; }
     }
 
     /// <summary>
@@ -76,6 +106,7 @@ namespace LombdaAgentMAUI.Core.Models
         private bool _isUser;
         private bool _isMarkdown = true; // Default to true for agent responses
         private DateTime _timestamp = DateTime.Now;
+        private List<FileAttachment>? _files;
 
         public string Text 
         { 
@@ -137,6 +168,28 @@ namespace LombdaAgentMAUI.Core.Models
                 }
             }
         }
+
+        /// <summary>
+        /// File attachments included with this message
+        /// </summary>
+        public List<FileAttachment>? Files
+        {
+            get => _files;
+            set
+            {
+                if (_files != value)
+                {
+                    _files = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(HasFiles));
+                }
+            }
+        }
+
+        /// <summary>
+        /// Indicates whether this message has file attachments
+        /// </summary>
+        public bool HasFiles => Files != null && Files.Count > 0;
 
         public string DisplayTime => Timestamp.ToString("HH:mm:ss");
 

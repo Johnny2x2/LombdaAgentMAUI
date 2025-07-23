@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using LombdaAgentMAUI.Core.Services;
 using LombdaAgentMAUI.Services;
+using System.Diagnostics;
 
 namespace LombdaAgentMAUI;
 
@@ -8,6 +9,7 @@ public static class MauiProgram
 {
     public static MauiApp CreateMauiApp()
     {
+        Debug.WriteLine("Creating MAUI App...");
         var builder = MauiApp.CreateBuilder();
         builder
             .UseMauiApp<App>()
@@ -17,26 +19,31 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
             });
 
-        // Register platform-specific secure storage service
+        // Register the secure storage service first
         builder.Services.AddSingleton<ISecureStorageService, MauiSecureStorageService>();
-
-        // Register configuration service
+        
+        // Register core services that depend on secure storage
         builder.Services.AddSingleton<IConfigurationService, ConfigurationService>();
-
-        // Register session manager service
         builder.Services.AddSingleton<ISessionManagerService, SessionManagerService>();
-
-        // Register the MAUI-specific API service that handles dynamic URLs properly
+        
+        // Register file services
+        Debug.WriteLine("Registering FilePickerService...");
+        builder.Services.AddSingleton<IFilePickerService, FilePickerService>();
+        
+        // Register API services
         builder.Services.AddSingleton<IAgentApiService, MauiAgentApiService>();
-
+        
         // Register pages
         builder.Services.AddTransient<MainPage>();
         builder.Services.AddTransient<SettingsPage>();
+        builder.Services.AddTransient<FileUploadDialog>();
+        builder.Services.AddTransient<FilePickerTestPage>();
 
 #if DEBUG
         builder.Logging.AddDebug();
 #endif
 
+        Debug.WriteLine("MAUI App builder configuration complete.");
         return builder.Build();
     }
 }

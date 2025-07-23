@@ -74,6 +74,21 @@ namespace LombdaAgentMAUI.Services
         {
             return await GetOrCreateApiService().SendMessageAsync(agentId, message, threadId);
         }
+        
+        public async Task<MessageResponse?> SendMessageWithFileAsync(string agentId, string message, string fileBase64Data, string? threadId = null)
+        {
+            return await GetOrCreateApiService().SendMessageWithFileAsync(agentId, message, fileBase64Data, threadId);
+        }
+        
+        public async Task<MessageResponse?> SendMessageWithFileAttachmentAsync(string agentId, string message, FileAttachment fileAttachment, string? threadId = null)
+        {
+            return await GetOrCreateApiService().SendMessageWithFileAttachmentAsync(agentId, message, fileAttachment, threadId);
+        }
+        
+        public async Task<MessageResponse?> SendMessageWithFileAttachmentsAsync(string agentId, string message, List<FileAttachment> fileAttachments, string? threadId = null)
+        {
+            return await GetOrCreateApiService().SendMessageWithFileAttachmentsAsync(agentId, message, fileAttachments, threadId);
+        }
 
         public async Task SendMessageStreamAsync(string agentId, string message, string? threadId, Action<string> onMessageReceived, CancellationToken cancellationToken = default)
         {
@@ -88,6 +103,16 @@ namespace LombdaAgentMAUI.Services
         public async Task<string?> SendMessageStreamWithEventsAsync(string agentId, string message, string? threadId, Action<string> onMessageReceived, Action<StreamingEventData>? onEventReceived = null, CancellationToken cancellationToken = default)
         {
             return await GetOrCreateApiService().SendMessageStreamWithEventsAsync(agentId, message, threadId, onMessageReceived, onEventReceived, cancellationToken);
+        }
+        
+        public async Task<string?> SendMessageStreamWithFileAsync(string agentId, string message, string fileBase64Data, string? threadId, Action<string> onMessageReceived, Action<StreamingEventData>? onEventReceived = null, CancellationToken cancellationToken = default)
+        {
+            return await GetOrCreateApiService().SendMessageStreamWithFileAsync(agentId, message, fileBase64Data, threadId, onMessageReceived, onEventReceived, cancellationToken);
+        }
+        
+        public async Task<string?> SendMessageStreamWithFileAttachmentAsync(string agentId, string message, FileAttachment fileAttachment, string? threadId, Action<string> onMessageReceived, Action<StreamingEventData>? onEventReceived = null, CancellationToken cancellationToken = default)
+        {
+            return await GetOrCreateApiService().SendMessageStreamWithFileAttachmentAsync(agentId, message, fileAttachment, threadId, onMessageReceived, onEventReceived, cancellationToken);
         }
 
         public async Task<string?> SendMessageStreamWithEventsAsync(string agentId, string message, string? threadId, Func<string, Task> onMessageReceived, Func<StreamingEventData, Task>? onEventReceived = null, CancellationToken cancellationToken = default)

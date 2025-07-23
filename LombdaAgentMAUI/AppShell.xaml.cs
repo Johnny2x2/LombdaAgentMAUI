@@ -9,5 +9,6 @@ public partial class AppShell : Shell
         // Register routes for navigation
         Routing.RegisterRoute("MainPage", typeof(MainPage));
         Routing.RegisterRoute("SettingsPage", typeof(SettingsPage));
+        Routing.RegisterRoute("FilePickerTestPage", typeof(FilePickerTestPage));
 	}
 }

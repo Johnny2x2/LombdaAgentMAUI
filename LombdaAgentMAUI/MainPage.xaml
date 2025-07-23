@@ -149,17 +149,52 @@
                             BackgroundColor="{AppThemeBinding Light=White, Dark=#1C1C1C}"
                             Stroke="{AppThemeBinding Light=#E0E0E0, Dark=#404040}"
                             StrokeThickness="1">
-                        <Editor x:Name="MessageEditor"
-                                Placeholder="Type your message..."
-                                MinimumHeightRequest="80"
-                                MaximumHeightRequest="120"
-                                Margin="10"
-                                BackgroundColor="Transparent" />
+                        <Grid>
+                            <Editor x:Name="MessageEditor"
+                                    Placeholder="Type your message..."
+                                    MinimumHeightRequest="80"
+                                    MaximumHeightRequest="120"
+                                    Margin="10"
+                                    BackgroundColor="Transparent" />
+                                    
+                            <!-- File attachment indicator -->
+                            <Border x:Name="FileAttachmentIndicator"
+                                    IsVisible="False"
+                                    VerticalOptions="Start"
+                                    HorizontalOptions="End"
+                                    Margin="0,5,5,0"
+                                    BackgroundColor="{AppThemeBinding Light=#E3F2FD, Dark=#1976D2}"
+                                    Padding="8,4"
+                                    StrokeThickness="0">
+                                <Border.StrokeShape>
+                                    <RoundRectangle CornerRadius="8" />
+                                </Border.StrokeShape>
+                                <HorizontalStackLayout Spacing="8">
+                                    <Label Text="📎"  
+                                           FontSize="16" 
+                                           VerticalOptions="Center" />
+                                    <Label x:Name="FileNameLabel" 
+                                           Text="file.jpg" 
+                                           FontSize="12"
+                                           VerticalOptions="Center" />
+                                    <Button Text="✕"
+                                            Clicked="OnClearAttachmentClicked"
+                                            BackgroundColor="Transparent"
+                                            FontSize="12"
+                                            Padding="2"
+                                            WidthRequest="20"
+                                            HeightRequest="20"
+                                            VerticalOptions="Center" />
+                                </HorizontalStackLayout>
+                            </Border>
+                        </Grid>
                     </Border>
 
                     <Grid Grid.Row="1" Margin="0,5,0,0">
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
@@ -169,19 +204,26 @@
                                   Grid.Column="0"
                                   IsChecked="True"
                                   HorizontalOptions="Start" />
-                        <Label Grid.Column="0"
+                        <Label Grid.Column="1"
                                Text="Stream responses"
                                VerticalOptions="Center"
-                               Margin="30,0,0,0" />
+                               Margin="0,0,0,0" />
+
+                        <Button x:Name="AttachFileButton"
+                                Grid.Column="2"
+                                Text="📎"
+                                Clicked="OnAttachFileClicked"
+                                Margin="5,0" 
+                                ToolTipProperties.Text="Attach File" />
 
                         <Button x:Name="ClearButton"
-                                Grid.Column="1"
+                                Grid.Column="3"
                                 Text="Clear"
                                 Clicked="OnClearClicked"
                                 Margin="5,0" />
 
                         <Button x:Name="ClearSessionButton"
-                                Grid.Column="2"
+                                Grid.Column="4"
                                 Text="Clear Session"
                                 Clicked="OnClearSessionClicked"
                                 Margin="5,0"
@@ -190,7 +232,7 @@
                                 IsVisible="False" />
 
                         <Button x:Name="SendButton"
-                                Grid.Column="3"
+                                Grid.Column="5"
                                 Text="Send"
                                 Clicked="OnSendClicked"
                                 BackgroundColor="{AppThemeBinding Light=#512BD4, Dark=#512BD4}"

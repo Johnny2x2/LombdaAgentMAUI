@@ -308,5 +308,109 @@ namespace LombdaAgentMAUI.Tests.Services
             Assert.That(result, Is.Not.Null);
             Assert.That(result.Text, Is.EqualTo("Response to long message"));
         }
+
+        [Test]
+        public async Task SendMessageWithFileAsync_SuccessfulResponse_ReturnsMessageResponse()
+        {
+            // Arrange
+            var expectedResponse = new MessageResponse 
+            { 
+                AgentId = "agent-id", 
+                ThreadId = "thread-id", 
+                Text = "I've received your file." 
+            };
+            var jsonResponse = JsonSerializer.Serialize(expectedResponse, _jsonOptions);
+            SetupHttpResponse(HttpStatusCode.OK, jsonResponse);
+            
+            // Create sample file data URI
+            var fileBase64Data = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/";
+
+            // Act
+            var result = await _agentApiService.SendMessageWithFileAsync("agent-id", "Here is a file", fileBase64Data);
+
+            // Assert
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result.AgentId, Is.EqualTo("agent-id"));
+            Assert.That(result.ThreadId, Is.EqualTo("thread-id"));
+            Assert.That(result.Text, Is.EqualTo("I've received your file."));
+        }
+
+        [Test]
+        public void SendMessageWithFileAsync_EmptyFileData_ThrowsArgumentException()
+        {
+            // Act & Assert
+            Assert.ThrowsAsync<ArgumentException>(() => 
+                _agentApiService.SendMessageWithFileAsync("agent-id", "Message with no file", ""));
+        }
+
+        [Test]
+        public void SendMessageWithFileAsync_NullAgentId_ThrowsArgumentException()
+        {
+            // Act & Assert
+            Assert.ThrowsAsync<ArgumentException>(() => 
+                _agentApiService.SendMessageWithFileAsync("", "Message", "data:image/jpeg;base64,test"));
+        }
+
+        [Test]
+        public async Task SendMessageWithFileAttachmentAsync_SuccessfulResponse_ReturnsMessageResponse()
+        {
+            // Arrange
+            var expectedResponse = new MessageResponse 
+            { 
+                AgentId = "agent-id", 
+                ThreadId = "thread-id", 
+                Text = "I've received your file."
+            };
+            var jsonResponse = JsonSerializer.Serialize(expectedResponse, _jsonOptions);
+            SetupHttpResponse(HttpStatusCode.OK, jsonResponse);
+            
+            // Create sample file attachment
+            var fileAttachment = new FileAttachment
+            {
+                FileName = "test-image.jpg",
+                MediaType = "image/jpeg",
+                DataUri = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/"
+            };
+            
+            // Act
+            var result = await _agentApiService.SendMessageWithFileAttachmentAsync("agent-id", "Here is an image", fileAttachment);
+
+            // Assert
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result.AgentId, Is.EqualTo("agent-id"));
+            Assert.That(result.ThreadId, Is.EqualTo("thread-id"));
+            Assert.That(result.Text, Is.EqualTo("I've received your file."));
+        }
+
+        [Test]
+        public async Task SendMessageStreamWithFileAsync_SuccessfulResponse_ReturnsThreadId()
+        {
+            // Arrange
+            var expectedResponse = new MessageResponse 
+            { 
+                AgentId = "agent-id", 
+                ThreadId = "thread-id", 
+                Text = "I've received your file."
+            };
+            var jsonResponse = JsonSerializer.Serialize(expectedResponse, _jsonOptions);
+            SetupHttpResponse(HttpStatusCode.OK, jsonResponse);
+            
+            // Create sample file data URI
+            var fileBase64Data = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/";
+            var messagesReceived = new List<string>();
+            
+            // Act
+            var threadId = await _agentApiService.SendMessageStreamWithFileAsync(
+                "agent-id",
+                "Here is an image",
+                fileBase64Data,
+                null,
+                messagesReceived.Add,
+                null);
+
+            // Assert
+            Assert.That(threadId, Is.Not.Null);
+            Assert.That(threadId, Is.EqualTo("thread-id"));
+        }
     }
 }

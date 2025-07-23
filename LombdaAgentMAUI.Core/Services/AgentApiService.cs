@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using LombdaAgentMAUI.Core.Models;
+using LombdaAgentMAUI.Core.Utilities;
 
 namespace LombdaAgentMAUI.Core.Services
 {
@@ -24,7 +25,16 @@ namespace LombdaAgentMAUI.Core.Services
         Task<List<string>> GetAgentTypesAsync();
         Task<AgentResponse?> CreateAgentAsync(string name, string agentType = "Default");
         Task<AgentResponse?> GetAgentAsync(string id);
+        
+        // Messages without attachments
         Task<MessageResponse?> SendMessageAsync(string agentId, string message, string? threadId = null);
+        
+        // Messages with attachments
+        Task<MessageResponse?> SendMessageWithFileAsync(string agentId, string message, string fileBase64Data, string? threadId = null);
+        Task<MessageResponse?> SendMessageWithFileAttachmentAsync(string agentId, string message, FileAttachment fileAttachment, string? threadId = null);
+        Task<MessageResponse?> SendMessageWithFileAttachmentsAsync(string agentId, string message, List<FileAttachment> fileAttachments, string? threadId = null);
+        
+        // Streaming methods
         Task SendMessageStreamAsync(string agentId, string message, string? threadId, Action<string> onMessageReceived, CancellationToken cancellationToken = default);
         Task<string?> SendMessageStreamWithThreadAsync(string agentId, string message, string? threadId, Action<string> onMessageReceived, CancellationToken cancellationToken = default);
         
@@ -32,6 +42,16 @@ namespace LombdaAgentMAUI.Core.Services
         /// Enhanced streaming method that provides detailed event information
         /// </summary>
         Task<string?> SendMessageStreamWithEventsAsync(string agentId, string message, string? threadId, Action<string> onMessageReceived, Action<StreamingEventData>? onEventReceived = null, CancellationToken cancellationToken = default);
+        
+        /// <summary>
+        /// Enhanced streaming method with file attachment
+        /// </summary>
+        Task<string?> SendMessageStreamWithFileAsync(string agentId, string message, string fileBase64Data, string? threadId, Action<string> onMessageReceived, Action<StreamingEventData>? onEventReceived = null, CancellationToken cancellationToken = default);
+        
+        /// <summary>
+        /// Enhanced streaming method with file attachment
+        /// </summary>
+        Task<string?> SendMessageStreamWithFileAttachmentAsync(string agentId, string message, FileAttachment fileAttachment, string? threadId, Action<string> onMessageReceived, Action<StreamingEventData>? onEventReceived = null, CancellationToken cancellationToken = default);
         
         /// <summary>
         /// Update the base URL for API calls. This will create a new HttpClient instance.
@@ -180,6 +200,69 @@ namespace LombdaAgentMAUI.Core.Services
                 return null;
             }
         }
+        
+        public async Task<MessageResponse?> SendMessageWithFileAsync(string agentId, string message, string fileBase64Data, string? threadId = null)
+        {
+            try
+            {
+                // Validate input
+                if (string.IsNullOrEmpty(agentId))
+                    throw new ArgumentException("Agent ID cannot be empty", nameof(agentId));
+                
+                if (string.IsNullOrEmpty(fileBase64Data))
+                    throw new ArgumentException("File base64 data cannot be empty", nameof(fileBase64Data));
+                
+                // Create request with file
+                var request = new MessageRequest 
+                { 
+                    Text = message, 
+                    ThreadId = threadId,
+                    FileBase64Data = fileBase64Data
+                };
+                
+                var json = JsonSerializer.Serialize(request, _jsonOptions);
+                
+                // Log the request size for debugging
+                System.Diagnostics.Debug.WriteLine($"Sending message with file: JSON size = {json.Length} bytes");
+                
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync($"v1/agents/{agentId}/messages", content);
+                response.EnsureSuccessStatusCode();
+
+                var responseContent = await response.Content.ReadAsStringAsync();
+                return JsonSerializer.Deserialize<MessageResponse>(responseContent, _jsonOptions);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error sending message with file: {ex.Message}");
+                return null;
+            }
+        }
+        
+        public async Task<MessageResponse?> SendMessageWithFileAttachmentAsync(string agentId, string message, FileAttachment fileAttachment, string? threadId = null)
+        {
+            if (fileAttachment == null)
+                throw new ArgumentNullException(nameof(fileAttachment));
+                
+            return await SendMessageWithFileAsync(agentId, message, fileAttachment.DataUri, threadId);
+        }
+        
+        public async Task<MessageResponse?> SendMessageWithFileAttachmentsAsync(string agentId, string message, List<FileAttachment> fileAttachments, string? threadId = null)
+        {
+            // Validate input
+            if (string.IsNullOrEmpty(agentId))
+                throw new ArgumentException("Agent ID cannot be empty", nameof(agentId));
+            
+            if (fileAttachments == null || fileAttachments.Count == 0)
+                throw new ArgumentException("File attachments list cannot be empty", nameof(fileAttachments));
+            
+            // Convert attachments to FileBase64Data
+            var fileBase64Data = FileAttachmentUtility.ConvertAttachmentsToFileBase64Data(fileAttachments);
+            if (string.IsNullOrEmpty(fileBase64Data))
+                throw new InvalidOperationException("Failed to convert file attachments to base64 data");
+            
+            return await SendMessageWithFileAsync(agentId, message, fileBase64Data, threadId);
+        }
 
         // Legacy method - use Action-based implementation
         public async Task SendMessageStreamAsync(string agentId, string message, string? threadId, Action<string> onMessageReceived, CancellationToken cancellationToken = default)
@@ -218,7 +301,7 @@ namespace LombdaAgentMAUI.Core.Services
 
             // Use the async implementation
             return await SendMessageStreamWithEventsAsyncImplementation(
-                agentId, message, threadId, 
+                agentId, message, threadId, null,
                 asyncMsgCallback, asyncEventCallback, 
                 cancellationToken);
         }
@@ -233,23 +316,77 @@ namespace LombdaAgentMAUI.Core.Services
             CancellationToken cancellationToken = default)
         {
             return await SendMessageStreamWithEventsAsyncImplementation(
-                agentId, message, threadId, 
+                agentId, message, threadId, null,
                 onMessageReceived, onEventReceived, 
                 cancellationToken);
         }
+        
+        // Streaming with file attachment
+        public async Task<string?> SendMessageStreamWithFileAsync(
+            string agentId, 
+            string message, 
+            string fileBase64Data, 
+            string? threadId, 
+            Action<string> onMessageReceived, 
+            Action<StreamingEventData>? onEventReceived = null, 
+            CancellationToken cancellationToken = default)
+        {
+            // Wrap the action callbacks in async delegates
+            Func<string, Task> asyncMsgCallback = (text) => {
+                onMessageReceived(text);
+                return Task.CompletedTask;
+            };
 
-        // The actual implementation that both overloads use
+            Func<StreamingEventData, Task>? asyncEventCallback = null;
+            if (onEventReceived != null) {
+                asyncEventCallback = (eventData) => {
+                    onEventReceived(eventData);
+                    return Task.CompletedTask;
+                };
+            }
+
+            return await SendMessageStreamWithEventsAsyncImplementation(
+                agentId, message, threadId, fileBase64Data,
+                asyncMsgCallback, asyncEventCallback,
+                cancellationToken);
+        }
+        
+        public async Task<string?> SendMessageStreamWithFileAttachmentAsync(
+            string agentId, 
+            string message, 
+            FileAttachment fileAttachment, 
+            string? threadId, 
+            Action<string> onMessageReceived, 
+            Action<StreamingEventData>? onEventReceived = null, 
+            CancellationToken cancellationToken = default)
+        {
+            if (fileAttachment == null)
+                throw new ArgumentNullException(nameof(fileAttachment));
+                
+            return await SendMessageStreamWithFileAsync(
+                agentId, message, fileAttachment.DataUri, threadId, 
+                onMessageReceived, onEventReceived, cancellationToken);
+        }
+
+        // The actual implementation that all overloads use
         private async Task<string?> SendMessageStreamWithEventsAsyncImplementation(
             string agentId, 
             string message, 
             string? threadId, 
+            string? fileBase64Data,
             Func<string, Task> onMessageReceived, 
             Func<StreamingEventData, Task>? onEventReceived = null, 
             CancellationToken cancellationToken = default)
         {
             try
             {
-                var request = new MessageRequest { Text = message, ThreadId = threadId };
+                var request = new MessageRequest 
+                { 
+                    Text = message, 
+                    ThreadId = threadId,
+                    FileBase64Data = fileBase64Data
+                };
+                
                 var json = JsonSerializer.Serialize(request, _jsonOptions);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
