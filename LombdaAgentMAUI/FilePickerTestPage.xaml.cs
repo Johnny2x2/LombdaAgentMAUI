@@ -75,7 +75,8 @@ public partial class FilePickerTestPage : ContentPage
             Debug.WriteLine("Show dialog button clicked");
             StatusLabel.Text = "Showing file dialog...";
             ShowDialogButton.IsEnabled = false;
-            
+
+            //[USER]: This does not work you need to use  var fileAttachment = await _filePickerService.PickAndProcessSingleFileAsync(FilePickerFileType.Images);
             var fileDialog = new FileUploadDialog(_filePickerService);
             bool result = await fileDialog.ShowDialogAsync();
             
